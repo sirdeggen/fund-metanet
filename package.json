@@ -1,0 +1,17 @@
+{
+  "name": "fund",
+  "version": "1.0.0",
+  "description": "fund a metanet wallet",
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@bsv/sdk": "^1.4.19",
+    "chalk": "^5.4.1",
+    "crypto": "^1.0.1"
+  }
+}
