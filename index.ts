@@ -1,38 +1,56 @@
-import { WalletInterface, WalletClient, PrivateKey, PublicKey, P2PKH } from '@bsv/sdk'
+import { WalletClient, PrivateKey, PublicKey, P2PKH, KeyDeriver, WalletInterface, Utils } from '@bsv/sdk'
 import type { InternalizeActionArgs } from '@bsv/sdk'
-import crypto from 'crypto'
+import { randomBytes } from 'crypto'
 import chalk from 'chalk'
+import { createInterface } from 'readline';
+import { Wallet, WalletStorageManager, WalletSigner, Services, StorageClient } from '@bsv/wallet-toolbox'
+
+async function makeWallet (
+  chain: 'test' | 'main',
+  privateKey: string
+): Promise<WalletInterface> {
+  const keyDeriver = new KeyDeriver(new PrivateKey(privateKey, 'hex'))
+  const storageManager = new WalletStorageManager(keyDeriver.identityKey)
+  const signer = new WalletSigner(chain, keyDeriver, storageManager)
+  const services = new Services(chain)
+  const wallet = new Wallet(signer, services)
+  const client = new StorageClient(
+    wallet,
+    // Hard-code storage URLs for now, but this should be configurable in the future along with the private key.
+    'https://storage.babbage.systems'
+  )
+  await client.makeAvailable()
+  await wallet.storage.addWalletStorageProvider(client)
+
+  return wallet
+}
 
 async function fundWallet (
-  wallet: WalletInterface,
   amount: number,
   walletPrivateKey: string,
-  network: 'mainnet' | 'testnet'
-) {
-  const localWallet = new WalletClient('auto', 'localhost')
+): Promise<void> {
+
+  const wallet = await makeWallet('main', walletPrivateKey)
+  const remote = await wallet.isAuthenticated({})
+  console.log({ remote })
+
+  const localWallet = new WalletClient('json-api', 'deggen.com')
+  const local = await localWallet.isAuthenticated({})
+  console.log({ local })
   try {
     const { version } = await localWallet.getVersion()
     console.log(chalk.blue(`💰 Using local wallet version: ${version}`))
   } catch (err) {
     console.error(
-      chalk.red('❌ MetaNet Client is not installed or not running.')
+      chalk.red('❌ Metanet Desktop is not installed or not running.')
     )
     console.log(
-      chalk.blue('👉 Download MetaNet Client: https://projectbabbage.com/')
+      chalk.blue('👉 Download Metanet Desktop: https://metanet.bsvb.tech')
     )
     process.exit(1)
   }
-  const { network: localNet } = await localWallet.getNetwork()
-  if (network !== localNet) {
-    console.warn(
-      chalk.red(
-        `The currently-running MetaNet Client is on ${localNet} but LARS is configured for ${network}. Funding from local wallet is impossible.`
-      )
-    )
-    return
-  }
-  const derivationPrefix = crypto.randomBytes(10).toString('base64')
-  const derivationSuffix = crypto.randomBytes(10).toString('base64')
+  const derivationPrefix = randomBytes(10).toString('base64')
+  const derivationSuffix = randomBytes(10).toString('base64')
   const { publicKey: payer } = await localWallet.getPublicKey({
     identityKey: true
   })
@@ -54,18 +72,18 @@ async function fundWallet (
         payee
       }),
       satoshis: amount,
-      outputDescription: 'Fund LARS for local dev'
+      outputDescription: 'Fund wallet for remote use'
     }
   ]
   const transaction = await localWallet.createAction({
     outputs,
-    description: 'Funding LARS for development',
+    description: 'Funding wallet for remote use',
     options: {
       randomizeOutputs: false
     }
   })
   const directTransaction: InternalizeActionArgs = {
-    tx: transaction.tx,
+    tx: transaction.tx as number[],
     outputs: [
       {
         outputIndex: 0,
@@ -77,8 +95,33 @@ async function fundWallet (
         }
       }
     ],
-    description: 'Incoming LARS funding payment from local wallet'
+    description: 'Incoming wallet funding payment from local wallet'
   }
   await wallet.internalizeAction(directTransaction)
-  console.log(chalk.green('🎉 LARS Wallet funded!'))
+  console.log(chalk.green('🎉 Wallet funded!'))
 }
+
+// Create a readline interface
+const rl = createInterface({
+  input: process.stdin,
+  output: process.stdout
+});
+
+// Prompt the user for input
+rl.question('Enter wallet private key: ', (walletPrivateKey) => {
+  rl.question('Enter amount in satoshis: ', (amount) => {
+    if (!walletPrivateKey || !amount) {
+      console.error('❌ Missing required input.');
+      process.exit(1);
+    }
+
+    fundWallet(Number(amount), walletPrivateKey)
+      .catch((err) => {
+        console.error('❌', err);
+        process.exit(1);
+      })
+      .finally(() => {
+        rl.close();
+      });
+  });
+});
