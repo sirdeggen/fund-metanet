@@ -1,4 +1,5 @@
 import { Setup } from '@bsv/wallet-toolbox'
+import { PrivateKey } from '@bsv/sdk'
 
 const run = async () => {
     const wallet = await Setup.createWalletClientNoEnv({

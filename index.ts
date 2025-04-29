@@ -99,6 +99,7 @@ async function fundWallet (
   }
   await wallet.internalizeAction(directTransaction)
   console.log(chalk.green('🎉 Wallet funded!'))
+  console.log(chalk.blue(`🔗 View on WhatsOnChain: https://whatsonchain.com/tx/${transaction.txid}`))
 }
 
 // Create a readline interface
