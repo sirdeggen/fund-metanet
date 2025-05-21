@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { WalletClient, PrivateKey, PublicKey, P2PKH, KeyDeriver, WalletInterface, Utils } from '@bsv/sdk'
 import type { InternalizeActionArgs } from '@bsv/sdk'
 import { randomBytes } from 'crypto'
