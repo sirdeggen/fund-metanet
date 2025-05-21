@@ -7,6 +7,7 @@ import { Wallet, WalletStorageManager, WalletSigner, Services, StorageClient } f
 
 async function makeWallet (
   chain: 'test' | 'main',
+  storageURL: string,
   privateKey: string
 ): Promise<WalletInterface> {
   const keyDeriver = new KeyDeriver(new PrivateKey(privateKey, 'hex'))
@@ -16,8 +17,7 @@ async function makeWallet (
   const wallet = new Wallet(signer, services)
   const client = new StorageClient(
     wallet,
-    // Hard-code storage URLs for now, but this should be configurable in the future along with the private key.
-    'https://storage.babbage.systems'
+    storageURL
   )
   await client.makeAvailable()
   await wallet.storage.addWalletStorageProvider(client)
@@ -26,11 +26,13 @@ async function makeWallet (
 }
 
 async function fundWallet (
+  network: 'test' | 'main',
+  storageURL: string,
   amount: number,
   walletPrivateKey: string,
 ): Promise<void> {
 
-  const wallet = await makeWallet('main', walletPrivateKey)
+  const wallet = await makeWallet(network, storageURL, walletPrivateKey)
   const remote = await wallet.isAuthenticated({})
   console.log({ remote })
 
@@ -109,20 +111,43 @@ const rl = createInterface({
 });
 
 // Prompt the user for input
-rl.question('Enter wallet private key: ', (walletPrivateKey) => {
-  rl.question('Enter amount in satoshis: ', (amount) => {
-    if (!walletPrivateKey || !amount) {
-      console.error('❌ Missing required input.');
+rl.question('Enter network (test or main), default main: ', (network) => {
+  network = network || 'main'
+  if (network !== 'test' && network !== 'main') {
+    console.error('❌ Invalid network: ', network);
+    process.exit(1);
+  }
+  rl.question('Enter Wallet Storage URL you want to store the funds with, default https://storage.babbage.systems : ', (storageURL) => {
+    storageURL = storageURL || 'https://storage.babbage.systems'
+    if (!storageURL.startsWith('https://')) {
+      console.error('❌ Invalid storage URL: ', storageURL);
       process.exit(1);
     }
-
-    fundWallet(Number(amount), walletPrivateKey)
-      .catch((err) => {
-        console.error('❌', err);
+    rl.question('Enter wallet private key: ', (walletPrivateKey) => {
+      if (!walletPrivateKey) {
+        console.error('❌ Missing required input: ', { walletPrivateKey });
         process.exit(1);
+      }
+      try {
+        PrivateKey.fromHex(walletPrivateKey)
+      } catch (err) {
+        console.error('❌ Invalid private key: ', walletPrivateKey);
+        process.exit(1);
+      }
+      rl.question('Enter amount in satoshis: ', (amount) => {
+        if (!amount) {
+          console.error('❌ Missing required input: ', { amount });
+          process.exit(1);
+        }
+        fundWallet(network as 'test' | 'main', storageURL, Number(amount), walletPrivateKey)
+        .catch((err) => {
+          console.error('❌', err);
+          process.exit(1);
+        })
+        .finally(() => {
+          rl.close();
+        });
       })
-      .finally(() => {
-        rl.close();
-      });
-  });
+    })
+  })
 });
