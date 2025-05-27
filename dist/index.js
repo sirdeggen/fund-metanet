@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-import { WalletClient, PrivateKey, PublicKey, P2PKH, KeyDeriver } from '@bsv/sdk';
 import { randomBytes } from 'crypto';
 import chalk from 'chalk';
 import { createInterface } from 'readline';
+import { WalletClient, PrivateKey, PublicKey, P2PKH, KeyDeriver } from '@bsv/sdk';
 import { Wallet, WalletStorageManager, WalletSigner, Services, StorageClient } from '@bsv/wallet-toolbox';
 async function makeWallet(chain, storageURL, privateKey) {
     const keyDeriver = new KeyDeriver(new PrivateKey(privateKey, 'hex'));
@@ -12,11 +12,15 @@ async function makeWallet(chain, storageURL, privateKey) {
     const wallet = new Wallet(signer, services);
     const client = new StorageClient(wallet, storageURL);
     await client.makeAvailable();
-    await wallet.storage.addWalletStorageProvider(client);
+    await storageManager.addWalletStorageProvider(client);
+    const { totalOutputs } = await wallet.listOutputs({ basket: '893b7646de0e1c9f741bd6e9169b76a8847ae34adef7bef1e6a285371206d2e8' }, 'admin.com');
+    console.log(chalk.green(`💰 Wallet balance: ${totalOutputs}`));
     return wallet;
 }
 async function fundWallet(network, storageURL, amount, walletPrivateKey) {
     const wallet = await makeWallet(network, storageURL, walletPrivateKey);
+    if (amount === 0)
+        return;
     const remote = await wallet.isAuthenticated({});
     console.log({ remote });
     const localWallet = new WalletClient('json-api', 'deggen.com');
@@ -79,8 +83,8 @@ async function fundWallet(network, storageURL, amount, walletPrivateKey) {
         ],
         description: 'Incoming wallet funding payment from local wallet'
     };
-    await wallet.internalizeAction(directTransaction);
-    console.log(chalk.green('🎉 Wallet funded!'));
+    const result = await wallet.internalizeAction(directTransaction);
+    console.log(chalk.green(`🎉 Wallet funded! ${JSON.stringify(result)}`));
     console.log(chalk.blue(`🔗 View on WhatsOnChain: https://whatsonchain.com/tx/${transaction.txid}`));
 }
 // Create a readline interface
@@ -113,11 +117,9 @@ rl.question('Enter network (test or main), default main: ', (network) => {
                 console.error('❌ Invalid private key: ', walletPrivateKey);
                 process.exit(1);
             }
-            rl.question('Enter amount in satoshis: ', (amount) => {
-                if (!amount) {
-                    console.error('❌ Missing required input: ', { amount });
-                    process.exit(1);
-                }
+            rl.question('Enter amount in satoshis or leave blank to get balance: ', (amount) => {
+                if (amount === '')
+                    amount = '0';
                 fundWallet(network, storageURL, Number(amount), walletPrivateKey)
                     .catch((err) => {
                     console.error('❌', err);

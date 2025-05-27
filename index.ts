@@ -4,7 +4,7 @@ import { randomBytes } from 'crypto'
 import chalk from 'chalk'
 import { createInterface } from 'readline';
 import { WalletClient, PrivateKey, PublicKey, P2PKH, KeyDeriver, WalletInterface, InternalizeActionArgs } from '@bsv/sdk'
-import { Wallet, WalletStorageManager, WalletSigner, Services, StorageClient } from '@bsv/wallet-toolbox'
+import { Wallet, WalletStorageManager, WalletSigner, Services, StorageClient, WalletPermissionsManager } from '@bsv/wallet-toolbox'
 
 async function makeWallet (
   chain: 'test' | 'main',
@@ -21,7 +21,11 @@ async function makeWallet (
     storageURL
   )
   await client.makeAvailable()
-  await wallet.storage.addWalletStorageProvider(client)
+  await storageManager.addWalletStorageProvider(client)
+
+  const { totalOutputs } = await wallet.listOutputs({ basket: '893b7646de0e1c9f741bd6e9169b76a8847ae34adef7bef1e6a285371206d2e8' }, 'admin.com')
+
+  console.log(chalk.green(`💰 Wallet balance: ${totalOutputs}`))
 
   return wallet
 }
@@ -34,6 +38,7 @@ async function fundWallet (
 ): Promise<void> {
 
   const wallet = await makeWallet(network, storageURL, walletPrivateKey)
+  if (amount === 0) return
   const remote = await wallet.isAuthenticated({})
   console.log({ remote })
 
@@ -100,8 +105,8 @@ async function fundWallet (
     ],
     description: 'Incoming wallet funding payment from local wallet'
   }
-  await wallet.internalizeAction(directTransaction)
-  console.log(chalk.green('🎉 Wallet funded!'))
+  const result = await wallet.internalizeAction(directTransaction)
+  console.log(chalk.green(`🎉 Wallet funded! ${JSON.stringify(result)}`))
   console.log(chalk.blue(`🔗 View on WhatsOnChain: https://whatsonchain.com/tx/${transaction.txid}`))
 }
 
@@ -135,11 +140,8 @@ rl.question('Enter network (test or main), default main: ', (network) => {
         console.error('❌ Invalid private key: ', walletPrivateKey);
         process.exit(1);
       }
-      rl.question('Enter amount in satoshis: ', (amount) => {
-        if (!amount) {
-          console.error('❌ Missing required input: ', { amount });
-          process.exit(1);
-        }
+      rl.question('Enter amount in satoshis or leave blank to get balance: ', (amount) => {
+        if (amount === '') amount = '0'
         fundWallet(network as 'test' | 'main', storageURL, Number(amount), walletPrivateKey)
         .catch((err) => {
           console.error('❌', err);
